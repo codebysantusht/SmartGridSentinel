@@ -1,0 +1,271 @@
+
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SmartGrid Sentinel | Security Operations</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+<div class="shell">
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark">S</div>
+      <div><b>SMARTGRID</b><span>SENTINEL / SOC</span></div>
+    </div>
+    <div class="nav-label">WORKSPACE</div>
+    <a class="nav active" href="#overview"><span>◫</span> Overview</a>
+    <a class="nav" href="#meters"><span>▦</span> Meter fleet</a>
+    <a class="nav" href="#integrity"><span>⬡</span> Integrity lab</a>
+    <a class="nav" href="#readings"><span>ϟ</span> Secure readings</a>
+    <a class="nav" href="#events"><span>≋</span> Security events</a>
+    <div class="sidebar-bottom">
+      <div class="status-card">
+        <div class="pulse"></div>
+        <div><b>Protection active</b><small>HMAC · SHA-256 chain</small></div>
+      </div>
+      <div class="profile">
+        <div class="avatar">GG</div>
+        <div><b>Grid operator</b><small>Local demo environment</small></div>
+        <span class="dots">•••</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main">
+    <header class="topbar">
+      <div>
+        <div class="eyebrow">SECURITY OPERATIONS / SMART GRID</div>
+        <h1>Overview <span class="live-pill"><i></i> SYSTEM ONLINE</span></h1>
+        <p>Monitor meter activity, validate cryptographic integrity, and inspect security events.</p>
+      </div>
+      <div class="top-actions">
+        <div class="date-chip"><span>◷</span><span id="clock">Local time</span></div>
+        <button class="btn secondary" id="refreshBtn">↻ Refresh</button>
+      </div>
+    </header>
+
+    <div class="notice">
+      <div class="notice-icon">✦</div>
+      <div>
+        <b>Privacy-first monitoring</b>
+        <span>Authentication and integrity checks run on each submitted reading. Aggregate view returns totals without listing individual readings.</span>
+      </div>
+      <button class="icon-btn" id="dismissNotice" aria-label="Dismiss">×</button>
+    </div>
+
+    <section class="metrics" id="overview">
+      <article class="metric">
+        <div class="metric-top"><span>Registered meters</span><span class="metric-icon teal">▦</span></div>
+        <div class="metric-value" id="kMeters">—</div>
+        <div class="metric-foot"><span class="dot green"></span> Active fleet</div>
+      </article>
+      <article class="metric">
+        <div class="metric-top"><span>Authenticated readings</span><span class="metric-icon blue">⌁</span></div>
+        <div class="metric-value" id="kReadings">—</div>
+        <div class="metric-foot"><span class="dot green"></span> HMAC verified on ingest</div>
+      </article>
+      <article class="metric">
+        <div class="metric-top"><span>Energy processed</span><span class="metric-icon purple">ϟ</span></div>
+        <div class="metric-value" id="kEnergy">— <small>Wh</small></div>
+        <div class="metric-foot">Across all stored readings</div>
+      </article>
+      <article class="metric">
+        <div class="metric-top"><span>High-priority events</span><span class="metric-icon orange">⌁</span></div>
+        <div class="metric-value" id="kAlerts">—</div>
+        <div class="metric-foot"><span id="kEvents">— total events</span></div>
+      </article>
+    </section>
+
+    <section class="content-grid">
+      <article class="panel chart-panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">TELEMETRY</div>
+            <h2>Consumption activity</h2>
+            <p>Most recent readings · watt-hours</p>
+          </div>
+          <span class="tag">LIVE DATA</span>
+        </div>
+        <div class="chart-wrap">
+          <div class="y-axis">
+            <span>2.5k</span><span>1.8k</span><span>1.2k</span><span>600</span><span>0</span>
+          </div>
+          <div id="chart" class="chart">
+            <div class="empty">Submit readings to populate the chart.</div>
+          </div>
+        </div>
+        <div class="chart-legend">
+          <span><i class="legend-dot"></i> Meter readings (Wh)</span>
+          <span id="chartCount">Waiting for data</span>
+        </div>
+      </article>
+
+      <article class="panel integrity-panel" id="integrity">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">CRYPTOGRAPHIC CONTROLS</div>
+            <h2>Integrity lab</h2>
+            <p>Run checks against the local database</p>
+          </div>
+          <span class="shield">⬡</span>
+        </div>
+        <label class="field-label" for="meterSelect">Target meter</label>
+        <select id="meterSelect"><option value="">Loading meters…</option></select>
+        <div class="control-row">
+          <button class="btn primary" id="verifyBtn">✓ Verify integrity</button>
+          <button class="btn secondary" id="baselineBtn">Set baseline</button>
+        </div>
+        <div class="integrity-result" id="integrityResult">
+          <div class="result-symbol">◈</div>
+          <div><b>Ready to verify</b><span>Select a meter and run an integrity check.</span></div>
+        </div>
+        <div class="lab-actions">
+          <button class="lab-btn" id="replayBtn">
+            <span class="lab-icon orange">↶</span>
+            <span><b>Simulate replay</b><small>Try a duplicate sequence packet</small></span>
+            <span class="arrow">›</span>
+          </button>
+          <button class="lab-btn" id="tamperBtn">
+            <span class="lab-icon red">⌁</span>
+            <span><b>Simulate tampering</b><small>Alter a stored value for detection demo</small></span>
+            <span class="arrow">›</span>
+          </button>
+        </div>
+      </article>
+    </section>
+
+    <section class="content-grid lower-grid">
+      <article class="panel" id="meters">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">FLEET MANAGEMENT</div>
+            <h2>Smart meter fleet</h2>
+            <p>Registered devices and stored telemetry</p>
+          </div>
+          <button class="btn secondary small" id="openRegister">＋ Register meter</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>METER / LOCATION</th><th>STATUS</th><th>READINGS</th><th>TOTAL ENERGY</th><th></th></tr>
+            </thead>
+            <tbody id="meterRows">
+              <tr><td colspan="5" class="empty-cell">Loading meter fleet…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <article class="panel aggregate-panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">PRIVACY-AWARE REPORT</div>
+            <h2>Aggregate query</h2>
+            <p>Return total only, not individual readings</p>
+          </div>
+          <span class="metric-icon purple">∑</span>
+        </div>
+        <div class="aggregate-number" id="aggregateValue">— <small>Wh</small></div>
+        <div class="aggregate-sub" id="aggregateSub">Select a meter to calculate its aggregate.</div>
+        <button class="btn secondary full" id="aggregateBtn">Calculate aggregate ↗</button>
+        <div class="privacy-note"><span>◉</span> Individual values are omitted from the aggregate response.</div>
+      </article>
+    </section>
+
+    <!-- NEW: SECURE READING SUBMISSION -->
+    <section class="content-grid reading-grid" id="readings">
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">SECURE INGESTION</div>
+            <h2>Submit a meter reading</h2>
+            <p>Authenticate a new consumption packet and append it to the hash chain</p>
+          </div>
+          <span class="metric-icon teal">ϟ</span>
+        </div>
+        <form id="readingForm" class="reading-form">
+          <label class="field-label" for="readingMeter">Target meter</label>
+          <select id="readingMeter" required>
+            <option value="">Loading meters…</option>
+          </select>
+          <label class="field-label" for="readingWh">Consumption (Wh)</label>
+          <div class="input-suffix">
+            <input id="readingWh" type="number" min="1" max="10000000" step="1" placeholder="e.g. 1500" required>
+            <span>Wh</span>
+          </div>
+          <button class="btn primary full" id="submitReadingBtn" type="submit">✓ Authenticate &amp; submit reading</button>
+        </form>
+        <div class="integrity-result" id="readingResult">
+          <div class="result-symbol">⌁</div>
+          <div><b>Ready for secure ingestion</b><span>Submitted values are authenticated by the backend before storage.</span></div>
+        </div>
+      </article>
+
+      <!-- NEW: READING HISTORY -->
+      <article class="panel">
+        <div class="panel-head">
+          <div>
+            <div class="eyebrow">METER TELEMETRY</div>
+            <h2>Reading history</h2>
+            <p>Sequence, timestamp, MAC and chain hash for selected meter</p>
+          </div>
+          <button class="btn secondary small" id="historyRefresh">↻ Refresh</button>
+        </div>
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr><th>SEQ</th><th>TIME</th><th>CONSUMPTION</th><th>HMAC</th><th>CHAIN HASH</th></tr>
+            </thead>
+            <tbody id="readingHistoryRows">
+              <tr><td colspan="5" class="empty-cell">Select a meter to load history.</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="privacy-note">Cryptographic values are shown for demonstration. Do not expose production secrets or sensitive telemetry in a public dashboard.</div>
+      </article>
+    </section>
+
+    <section class="panel events-panel" id="events">
+      <div class="panel-head">
+        <div>
+          <div class="eyebrow">AUDIT TRAIL</div>
+          <h2>Recent security events</h2>
+          <p>Persisted application activity from SQLite</p>
+        </div>
+        <button class="btn secondary small" id="eventsRefresh">↻ Refresh events</button>
+      </div>
+      <div id="eventsList" class="events-list">
+        <div class="empty-cell">Loading events…</div>
+      </div>
+    </section>
+
+    <footer>
+      <span>SMARTGRID SENTINEL <b>v0.1.0</b></span>
+      <span>Educational prototype · Local SQLite storage · <span class="footer-green">● API connected</span></span>
+    </footer>
+  </main>
+</div>
+
+<div class="toast" id="toast" role="status"></div>
+
+<dialog id="registerDialog">
+  <form id="registerForm" method="dialog">
+    <div class="dialog-head">
+      <div><div class="eyebrow">FLEET MANAGEMENT</div><h2>Register a meter</h2></div>
+      <button class="icon-btn" value="cancel" aria-label="Close">×</button>
+    </div>
+    <label class="field-label" for="newMeterId">Meter ID</label>
+    <input id="newMeterId" required minlength="3" maxlength="40" pattern="[A-Za-z0-9_-]+" placeholder="e.g. METER-004">
+    <label class="field-label" for="newMeterLabel">Location / label</label>
+    <input id="newMeterLabel" required minlength="2" maxlength="80" value="Residential Smart Meter">
+    <div class="dialog-actions">
+      <button class="btn secondary" value="cancel">Cancel</button>
+      <button class="btn primary" id="registerSubmit" value="default">Register meter</button>
+    </div>
+  </form>
+</dialog>
+</body>
+</html>
