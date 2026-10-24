@@ -227,6 +227,34 @@ async function aggregate() {
   await refreshAll();
 }
 
+
+async function refreshAggregate() {
+  const id = selectedMeter();
+
+  if (!id) {
+    $("aggregateValue").innerHTML = '— <small>Wh</small>';
+    $("aggregateSub").textContent = "Select a meter to calculate its aggregate.";
+    return;
+  }
+
+  try {
+    const result = await api(
+      `/api/meters/${encodeURIComponent(id)}/aggregate`
+    );
+
+    $("aggregateValue").innerHTML =
+      `${fmt(result.total_consumption_wh)} <small>Wh</small>`;
+
+    $("aggregateSub").textContent =
+      `${result.reading_count} readings included · ${id}`;
+  } catch (error) {
+    $("aggregateSub").textContent =
+      "Aggregate could not be refreshed. Try again.";
+    console.error("Aggregate refresh failed:", error);
+  }
+}
+
+
 async function replay() {
   const id = selectedMeter();
   if (!id) throw new Error("Select a meter first.");
@@ -341,7 +369,9 @@ $("readingForm").addEventListener("submit", async e => {
 
     await refreshAll();
     $("readingMeter").value = meter_id;
+    $("meterSelect").value = meter_id;
     await loadReadingHistory();
+    await refreshAggregate();
   } catch (err) {
     const panel = $("readingResult");
     panel.className = "integrity-result bad";
@@ -399,6 +429,7 @@ $("meterSelect").addEventListener("change", async () => {
   $("aggregateSub").textContent = "Click Calculate aggregate to query this meter.";
   $("readingMeter").value = selectedMeter();
   await loadReadingHistory();
+  await refreshAggregate();
 });
 
 $("readingMeter").addEventListener("change", loadReadingHistory);
