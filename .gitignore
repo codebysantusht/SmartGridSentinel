@@ -16,3 +16,5 @@ data/*.db
 data/*.sqlite
 data/*.sqlite3
 *.log
+
+data/paillier_keys_backup.json

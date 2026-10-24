@@ -1,5 +1,4 @@
 
-
 import json
 import os
 from pathlib import Path
@@ -76,6 +75,31 @@ class PaillierManager:
             raise ValueError("Reading cannot be negative.")
 
         return self.public_key.encrypt(reading_wh)
+
+    def load_encrypted_reading(self, ciphertext: str):
+        """Reconstruct a persisted integer-reading ciphertext.
+
+        The database stores the Paillier ciphertext as a decimal string.
+        Readings are encrypted as integers in Wh, so their Paillier
+        exponent is zero.
+        """
+        if not isinstance(ciphertext, str) or not ciphertext.isdecimal():
+            raise ValueError(
+                "Stored Paillier ciphertext must be a decimal integer."
+            )
+
+        value = int(ciphertext)
+
+        if value <= 0 or value >= self.public_key.n ** 2:
+            raise ValueError(
+                "Stored Paillier ciphertext is outside the valid range."
+            )
+
+        return paillier.EncryptedNumber(
+            self.public_key,
+            value,
+            0
+        )
 
     def aggregate_encrypted(self, encrypted_readings):
         encrypted_readings = list(encrypted_readings)
