@@ -14,6 +14,11 @@ from app.security import (
     make_chain_hash, reading_root
 )
 
+from app.neighborhood_aggregator import (
+    create_neighborhood_aggregate,
+    verify_neighborhood_aggregate,
+)
+
 BASE = Path(__file__).resolve().parent
 app = FastAPI(
     title="SmartGrid Sentinel",
@@ -195,6 +200,11 @@ def readings(meter_id: str):
 class ReadingCreate(BaseModel):
     meter_id: str = Field(min_length=3, max_length=40)
     consumption_wh: int = Field(gt=0, le=10_000_000)
+
+class NeighborhoodAggregateCreate(BaseModel):
+    neighborhood_id: str = Field(min_length=3, max_length=40)
+    batch_id: str = Field(min_length=3, max_length=60)
+    meter_ids: list[str] = Field(min_length=1, max_length=50)
 
 
 @app.post("/api/readings")
@@ -701,3 +711,54 @@ def seed_demo():
             "meters_created": 3,
             "readings_created": 8
         }
+class NeighborhoodAggregateVerifyRequest(BaseModel):
+    neighborhood_id: str = Field(min_length=3, max_length=40)
+    batch_id: str = Field(min_length=3, max_length=60)
+    meter_count: int = Field(gt=0, le=50)
+    total_consumption_wh: int = Field(ge=0)
+    child_manifest_digest: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+    parent_mac: str = Field(pattern=r"^[a-fA-F0-9]{64}$")
+
+
+@app.post("/api/neighborhoods/aggregate")
+def neighborhood_aggregate(data: NeighborhoodAggregateCreate):
+    with db_session() as db:
+        try:
+            result = create_neighborhood_aggregate(
+                db=db,
+                neighborhood_id=data.neighborhood_id,
+                batch_id=data.batch_id,
+                meter_ids=data.meter_ids,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        event(
+            db,
+            None,
+            "NEIGHBORHOOD_AGGREGATED",
+            "INFO",
+            f"Batch {data.batch_id}: {result['meter_count']} meters aggregated."
+        )
+
+        return result
+
+
+@app.post("/api/neighborhoods/verify")
+def neighborhood_aggregate_verify(data: NeighborhoodAggregateVerifyRequest):
+    aggregate = data.model_dump()
+
+    try:
+        valid = verify_neighborhood_aggregate(aggregate)
+    except (KeyError, ValueError):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid aggregate verification payload."
+        )
+
+    return {
+        "neighborhood_id": data.neighborhood_id,
+        "batch_id": data.batch_id,
+        "valid": valid,
+        "verification": "PASSED" if valid else "FAILED",
+    }

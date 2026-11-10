@@ -18,3 +18,5 @@ data/*.sqlite3
 *.log
 
 data/paillier_keys_backup.json
+
+data/aggregator_keys.json
