@@ -19,6 +19,10 @@ from app.neighborhood_aggregator import (
     verify_neighborhood_aggregate,
 )
 
+from app.private_neighborhood_aggregator import (
+    create_private_neighborhood_aggregate,
+)
+
 BASE = Path(__file__).resolve().parent
 app = FastAPI(
     title="SmartGrid Sentinel",
@@ -762,3 +766,28 @@ def neighborhood_aggregate_verify(data: NeighborhoodAggregateVerifyRequest):
         "valid": valid,
         "verification": "PASSED" if valid else "FAILED",
     }
+
+
+@app.post("/api/neighborhoods/private-aggregate")
+def private_neighborhood_aggregate(data: NeighborhoodAggregateCreate):
+    with db_session() as db:
+        try:
+            result = create_private_neighborhood_aggregate(
+                db=db,
+                neighborhood_id=data.neighborhood_id,
+                batch_id=data.batch_id,
+                meter_ids=data.meter_ids,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc))
+
+        event(
+            db,
+            None,
+            "PRIVATE_NEIGHBORHOOD_AGGREGATED",
+            "INFO",
+            f"Private batch {data.batch_id}: "
+            f"{result['meter_count']} meters aggregated using Paillier."
+        )
+
+        return result
