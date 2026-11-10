@@ -18,6 +18,7 @@
     <div class="nav-label">WORKSPACE</div>
     <a class="nav active" href="#overview"><span>◫</span> Overview</a>
     <a class="nav" href="#meters"><span>▦</span> Meter fleet</a>
+    <a class="nav" href="#neighborhood"><span>⌘</span> Neighborhood MAC</a>
     <a class="nav" href="#integrity"><span>⬡</span> Integrity lab</a>
     <a class="nav" href="#readings"><span>ϟ</span> Secure readings</a>
     <a class="nav" href="#events"><span>≋</span> Security events</a>
@@ -174,6 +175,110 @@
         <div class="privacy-note"><span>◉</span> Individual values are omitted from the aggregate response.</div>
       </article>
     </section>
+
+
+<!-- NEIGHBORHOOD-LEVEL NESTED MAC AGGREGATION -->
+<section class="panel neighborhood-panel" id="neighborhood">
+  <div class="panel-head">
+    <div>
+      <div class="eyebrow">HIERARCHICAL CRYPTOGRAPHIC VERIFICATION</div>
+      <h2>Neighborhood MAC aggregation</h2>
+      <p>Authenticate individual meter evidence and generate a neighborhood-level aggregate</p>
+    </div>
+    <span class="metric-icon purple">⌘</span>
+  </div>
+
+  <div class="neighborhood-form-grid">
+    <div>
+      <label class="field-label" for="neighborhoodId">Neighborhood ID</label>
+      <input
+        id="neighborhoodId"
+        type="text"
+        minlength="3"
+        maxlength="40"
+        value="NEIGHBORHOOD-01"
+        required
+      >
+    </div>
+
+    <div>
+      <label class="field-label" for="neighborhoodBatch">Batch ID</label>
+      <input
+        id="neighborhoodBatch"
+        type="text"
+        minlength="3"
+        maxlength="60"
+        value="BATCH-UI-001"
+        required
+      >
+    </div>
+  </div>
+
+  <label class="field-label" for="neighborhoodMeters">
+    Select meters to aggregate
+  </label>
+
+  <select id="neighborhoodMeters" multiple size="5">
+    <option value="">Loading meters...</option>
+  </select>
+
+  <div class="neighborhood-help">
+    Hold Ctrl while selecting multiple meters. Every selected meter's stored
+    readings will undergo individual HMAC and hash-chain verification.
+  </div>
+
+  <div class="control-row neighborhood-actions">
+    <button class="btn primary" id="createNeighborhoodBtn" type="button">
+      Generate aggregate
+    </button>
+
+    <button class="btn secondary" id="verifyNeighborhoodBtn" type="button" disabled>
+      Verify parent MAC
+    </button>
+  </div>
+
+  <div class="integrity-result" id="neighborhoodResult">
+    <div class="result-symbol">⌘</div>
+    <div>
+      <b>Ready for aggregation</b>
+      <span>Select meters and generate a neighborhood aggregate.</span>
+    </div>
+  </div>
+
+  <div id="neighborhoodDetails" class="neighborhood-details" hidden>
+    <div class="neighborhood-stat">
+      <span>Selected meters</span>
+      <b id="neighborhoodMeterCount">—</b>
+    </div>
+
+    <div class="neighborhood-stat">
+      <span>Verified readings</span>
+      <b id="neighborhoodReadingCount">—</b>
+    </div>
+
+    <div class="neighborhood-stat">
+      <span>Total consumption</span>
+      <b id="neighborhoodTotal">—</b>
+    </div>
+
+    <div class="neighborhood-hash">
+      <label>Child manifest SHA-256 digest</label>
+      <code id="neighborhoodDigest">—</code>
+    </div>
+
+    <div class="neighborhood-hash">
+      <label>Parent aggregate MAC</label>
+      <code id="neighborhoodParentMac">—</code>
+    </div>
+  </div>
+
+  <div class="privacy-note">
+    Individual meter authentication is performed before aggregation.
+    The parent MAC authenticates the aggregate envelope. This prototype
+    does not implement persistent neighborhood membership.
+  </div>
+</section>
+
 
     <!-- NEW: SECURE READING SUBMISSION -->
     <section class="content-grid reading-grid" id="readings">

@@ -146,6 +146,7 @@ async function refreshAll() {
   try {
     await Promise.all([loadStats(), loadMeters(), loadEvents()]);
     await syncReadingMeterOptions();
+    await syncNeighborhoodMeterOptions();
   } catch (e) {
     toast(e.message, true);
   }
@@ -463,3 +464,226 @@ setInterval(updateClock, 30000);
     toast(`Backend connection failed: ${e.message}`, true);
   }
 })();
+
+
+// ===== Neighborhood MAC Dashboard Integration =====
+
+let lastNeighborhoodAggregate = null;
+
+// Load active meters into the neighborhood multi-select.
+async function syncNeighborhoodMeterOptions() {
+  const select = $("neighborhoodMeters");
+  if (!select) return;
+
+  const previouslySelected = Array.from(select.selectedOptions)
+    .map(option => option.value);
+
+  const activeMeters = metersCache.filter(
+    meter => meter.status === "ACTIVE"
+  );
+
+  select.innerHTML = activeMeters.length
+    ? activeMeters.map(meter => `
+        <option value="${escapeHtml(meter.meter_id)}">
+          ${escapeHtml(meter.meter_id)} · ${escapeHtml(meter.label)}
+          (${fmt(meter.reading_count)} readings)
+        </option>
+      `).join("")
+    : '<option value="">No active meters available</option>';
+
+  Array.from(select.options).forEach(option => {
+    option.selected = previouslySelected.includes(option.value);
+  });
+}
+
+// Safely update the neighborhood result panel.
+function showNeighborhoodStatus(title, message, state = "") {
+  const panel = $("neighborhoodResult");
+  if (!panel) return;
+
+  panel.className = `integrity-result ${state}`;
+
+  const symbol = panel.querySelector(".result-symbol");
+  const content = panel.querySelector("div:last-child");
+
+  if (symbol) {
+    symbol.textContent =
+      state === "good" ? "✓" :
+      state === "bad" ? "!" : "⌘";
+  }
+
+  if (content) {
+    content.replaceChildren();
+
+    const heading = document.createElement("b");
+    heading.textContent = title;
+
+    const description = document.createElement("span");
+    description.textContent = message;
+
+    content.append(heading, description);
+  }
+}
+
+// Generate a neighborhood aggregate.
+async function createNeighborhoodAggregate() {
+  const neighborhoodId = $("neighborhoodId").value.trim();
+  const batchId = $("neighborhoodBatch").value.trim();
+
+  const meterIds = Array.from(
+    $("neighborhoodMeters").selectedOptions
+  )
+    .map(option => option.value)
+    .filter(Boolean);
+
+  if (neighborhoodId.length < 3) {
+    throw new Error("Enter a valid neighborhood ID.");
+  }
+
+  if (batchId.length < 3) {
+    throw new Error("Enter a valid batch ID.");
+  }
+
+  if (!meterIds.length) {
+    throw new Error("Select at least one active meter.");
+  }
+
+  showNeighborhoodStatus(
+    "Authenticating meter evidence",
+    "Checking individual HMACs and hash-chain links..."
+  );
+
+  try {
+    const result = await api("/api/neighborhoods/aggregate", {
+      method: "POST",
+      body: JSON.stringify({
+        neighborhood_id: neighborhoodId,
+        batch_id: batchId,
+        meter_ids: meterIds
+      })
+    });
+
+    // Keep only the fields required by the verification endpoint.
+    lastNeighborhoodAggregate = {
+      neighborhood_id: result.neighborhood_id,
+      batch_id: result.batch_id,
+      meter_count: result.meter_count,
+      total_consumption_wh: result.total_consumption_wh,
+      child_manifest_digest: result.child_manifest_digest,
+      parent_mac: result.parent_mac
+    };
+
+    if (
+      !lastNeighborhoodAggregate.parent_mac ||
+      !lastNeighborhoodAggregate.child_manifest_digest
+    ) {
+      lastNeighborhoodAggregate = null;
+      throw new Error("The API returned an incomplete aggregate.");
+    }
+
+    $("neighborhoodMeterCount").textContent =
+      fmt(result.meter_count);
+
+    $("neighborhoodReadingCount").textContent =
+      fmt(result.reading_count);
+
+    $("neighborhoodTotal").textContent =
+      `${fmt(result.total_consumption_wh)} Wh`;
+
+    $("neighborhoodDigest").textContent =
+      result.child_manifest_digest;
+
+    $("neighborhoodParentMac").textContent =
+      result.parent_mac;
+
+    $("neighborhoodDetails").hidden = false;
+    $("verifyNeighborhoodBtn").disabled = false;
+
+    showNeighborhoodStatus(
+      "Aggregate generated successfully",
+      `${fmt(result.meter_count)} meters and ${fmt(result.reading_count)} readings authenticated. Parent MAC is ready for verification.`,
+      "good"
+    );
+
+    toast("Neighborhood aggregate generated successfully.");
+
+    await refreshAll();
+
+  } catch (error) {
+    lastNeighborhoodAggregate = null;
+    $("verifyNeighborhoodBtn").disabled = true;
+
+    showNeighborhoodStatus(
+      "Aggregation failed",
+      error.message,
+      "bad"
+    );
+
+    throw error;
+  }
+}
+
+// Verify the parent aggregate MAC.
+async function verifyNeighborhoodParentMac() {
+  if (!lastNeighborhoodAggregate) {
+    throw new Error("Generate an aggregate before verification.");
+  }
+
+  showNeighborhoodStatus(
+    "Verifying parent MAC",
+    "Authenticating the neighborhood aggregate envelope..."
+  );
+
+  try {
+    const result = await api("/api/neighborhoods/verify", {
+      method: "POST",
+      body: JSON.stringify(lastNeighborhoodAggregate)
+    });
+
+    showNeighborhoodStatus(
+      result.valid
+        ? "Parent MAC verification passed"
+        : "Parent MAC verification failed",
+      result.valid
+        ? "The aggregate envelope matches the stored neighborhood aggregator key."
+        : "The supplied aggregate MAC could not be authenticated.",
+      result.valid ? "good" : "bad"
+    );
+
+    toast(
+      result.valid
+        ? "Parent MAC verified successfully."
+        : "Parent MAC verification failed.",
+      !result.valid
+    );
+
+  } catch (error) {
+    showNeighborhoodStatus(
+      "Verification request failed",
+      error.message,
+      "bad"
+    );
+
+    throw error;
+  }
+}
+
+// Neighborhood button wiring.
+$("createNeighborhoodBtn").addEventListener("click", () =>
+  runAction(
+    $("createNeighborhoodBtn"),
+    createNeighborhoodAggregate
+  )
+);
+
+$("verifyNeighborhoodBtn").addEventListener("click", () => {
+  if (!lastNeighborhoodAggregate) {
+    toast("Generate an aggregate first.", true);
+    return;
+  }
+
+  runAction(
+    $("verifyNeighborhoodBtn"),
+    verifyNeighborhoodParentMac
+  );
+});
