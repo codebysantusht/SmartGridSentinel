@@ -4,7 +4,13 @@ import sqlite3
 import pytest
 from phe import paillier
 
-from app.security import canonical_payload, make_mac, make_chain_hash
+from app.security import (
+    canonical_payload,
+    make_mac,
+    make_chain_hash,
+    ciphertext_digest,
+    CURRENT_AUTH_VERSION,
+)
 from app.paillier_manager import PaillierManager
 from app import neighborhood_aggregator
 from app import private_neighborhood_aggregator as private_aggregator
@@ -31,6 +37,8 @@ def test_db():
             timestamp TEXT NOT NULL,
             consumption_wh INTEGER NOT NULL,
             encrypted_consumption TEXT,
+            ciphertext_digest TEXT,
+            auth_version INTEGER NOT NULL DEFAULT 1,
             mac TEXT NOT NULL,
             chain_hash TEXT NOT NULL,
             previous_hash TEXT NOT NULL
@@ -44,9 +52,11 @@ def test_db():
 @pytest.fixture
 def test_manager():
     manager = PaillierManager.__new__(PaillierManager)
+
     manager.public_key, manager.private_key = (
         paillier.generate_paillier_keypair(n_length=512)
     )
+
     return manager
 
 
@@ -96,23 +106,26 @@ def add_meter(
     for sequence_no, consumption in enumerate(readings, start=1):
         timestamp = f"2026-11-10T10:{sequence_no:02d}:00"
 
+        encrypted_number = manager.encrypt_reading(consumption)
+        encrypted_value = str(encrypted_number.ciphertext())
+
+        digest = ciphertext_digest(encrypted_value)
+
         payload = canonical_payload(
             meter_id,
             sequence_no,
             timestamp,
             consumption,
             previous_hash,
+            ciphertext_hash=digest,
         )
 
         mac = make_mac(secret, payload)
         chain_hash = make_chain_hash(payload, mac)
 
-        encrypted = None
-
-        if not missing_ciphertexts:
-            encrypted = str(
-                manager.encrypt_reading(consumption).ciphertext()
-            )
+        stored_ciphertext = (
+            None if missing_ciphertexts else encrypted_value
+        )
 
         db.execute(
             """
@@ -122,18 +135,22 @@ def add_meter(
                 timestamp,
                 consumption_wh,
                 encrypted_consumption,
+                ciphertext_digest,
+                auth_version,
                 mac,
                 chain_hash,
                 previous_hash
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 meter_id,
                 sequence_no,
                 timestamp,
                 consumption,
-                encrypted,
+                stored_ciphertext,
+                digest,
+                CURRENT_AUTH_VERSION,
                 mac,
                 chain_hash,
                 previous_hash,
@@ -189,6 +206,7 @@ def test_invalid_child_mac_is_rejected(test_db, setup_environment):
         )
 
 
+
 def test_encrypted_total_mismatch_is_rejected(
     test_db,
     setup_environment,
@@ -201,7 +219,11 @@ def test_encrypted_total_mismatch_is_rejected(
     monkeypatch.setattr(
         private_aggregator,
         "create_neighborhood_aggregate",
-        lambda **kwargs: {"total_consumption_wh": 999},
+        lambda **kwargs: {
+            "total_consumption_wh": 999,
+            "reading_count": 2,
+            "legacy_reading_count": 0,
+        },
     )
 
     with pytest.raises(
@@ -216,7 +238,7 @@ def test_encrypted_total_mismatch_is_rejected(
         )
 
 
-def test_missing_ciphertexts_are_migrated(test_db, setup_environment):
+def test_missing_ciphertexts_are_rejected(test_db, setup_environment):
     manager = setup_environment
 
     add_meter(
@@ -227,33 +249,23 @@ def test_missing_ciphertexts_are_migrated(test_db, setup_environment):
         missing_ciphertexts=True,
     )
 
-    private_aggregator.create_private_neighborhood_aggregate(
-        test_db,
-        "TEST_ZONE",
-        "TEST_BATCH_004",
-        ["METER-001"],
-    )
+    with pytest.raises(ValueError):
+        private_aggregator.create_private_neighborhood_aggregate(
+            test_db,
+            "TEST_ZONE",
+            "TEST_BATCH_004",
+            ["METER-001"],
+        )
 
     rows = test_db.execute("""
-        SELECT id, encrypted_consumption
+        SELECT encrypted_consumption
         FROM readings
         WHERE meter_id = 'METER-001'
         ORDER BY sequence_no
     """).fetchall()
 
     assert len(rows) == 2
-    assert all(row["encrypted_consumption"] for row in rows)
-
-    decrypted_values = [
-        manager.decrypt_aggregate(
-            manager.load_encrypted_reading(row["encrypted_consumption"])
-        )
-        for row in rows
-    ]
-
-    assert decrypted_values == [500, 500]
-    assert rows[0]["id"] != rows[1]["id"]
-    assert rows[0]["encrypted_consumption"] != rows[1]["encrypted_consumption"]
+    assert all(row["encrypted_consumption"] is None for row in rows)
 
 
 def test_duplicate_meter_ids_are_rejected(test_db, setup_environment):

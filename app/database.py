@@ -4,7 +4,7 @@ from pathlib import Path
 from contextlib import contextmanager
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
-DATA_DIR.mkdir(exist_ok=True)
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 DB_PATH = DATA_DIR / "smartgrid_sentinel.db"
 
 
@@ -36,6 +36,8 @@ def init_db():
             mac TEXT NOT NULL,
             chain_hash TEXT NOT NULL,
             previous_hash TEXT NOT NULL,
+            auth_version INTEGER NOT NULL DEFAULT 1,
+            ciphertext_digest TEXT,
             FOREIGN KEY(meter_id) REFERENCES meters(meter_id),
             UNIQUE(meter_id, sequence_no)
         );
@@ -58,7 +60,6 @@ def init_db():
         );
         """)
 
-        # Migrate existing databases without deleting old readings.
         columns = {
             row["name"]
             for row in db.execute(
@@ -69,6 +70,16 @@ def init_db():
         if "encrypted_consumption" not in columns:
             db.execute(
                 "ALTER TABLE readings ADD COLUMN encrypted_consumption TEXT"
+            )
+
+        if "auth_version" not in columns:
+            db.execute(
+                "ALTER TABLE readings ADD COLUMN auth_version INTEGER NOT NULL DEFAULT 1"
+            )
+
+        if "ciphertext_digest" not in columns:
+            db.execute(
+                "ALTER TABLE readings ADD COLUMN ciphertext_digest TEXT"
             )
 
         db.commit()
