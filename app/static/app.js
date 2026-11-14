@@ -167,26 +167,33 @@ async function runAction(button, fn) {
   }
 }
 
+
 function showIntegrity(result) {
   const el = $("integrityResult");
-  el.className = `integrity-result ${result.integrity_valid ? "good" : "bad"}`;
+  const hmacValid = result.hmac_valid === true;
+  const integrityValid = result.integrity_valid === true;
+
+  el.className = `integrity-result ${integrityValid ? "good" : "bad"}`;
 
   const baseline = result.baseline_valid === null
     ? "No baseline created yet"
     : `Merkle baseline: ${result.baseline_valid ? "match" : "MISMATCH"}`;
 
   el.innerHTML = `
-    <div class="result-symbol">${result.integrity_valid ? "✓" : "!"}</div>
+    <div class="result-symbol">${integrityValid ? "✓" : "!"}</div>
     <div>
-      <b>${result.integrity_valid ? "Integrity verified" : "Integrity check failed"}</b>
+      <b>${integrityValid ? "Integrity verified" : "Integrity check failed"}</b>
       <span>
-        ${escapeHtml(result.message)}<br>
-        HMAC: ${result.hmac_valid ? "valid" : "failed"} ·
+        ${escapeHtml(result.message || "Verification completed")}<br>
+        <strong style="color:${hmacValid ? "#42d6a0" : "#ff6878"}">
+          HMAC: ${hmacValid ? "✓ VALID" : "✕ INVALID"}
+        </strong><br>
         Hash chain: ${result.hash_chain_valid ? "valid" : "failed"} ·
         ${escapeHtml(baseline)}
       </span>
     </div>`;
 }
+
 
 async function verifyIntegrity() {
   const id = selectedMeter();
@@ -269,6 +276,9 @@ async function replay() {
   await refreshAll();
 }
 
+
+
+
 async function tamper() {
   const id = selectedMeter();
   if (!id) throw new Error("Select a meter first.");
@@ -278,28 +288,26 @@ async function tamper() {
     body: "{}"
   });
 
-  toast(`Demo tampering applied to ${result.meter_id}. Now run Verify integrity.`, true);
+  showIntegrity({
+    integrity_valid: result.integrity_valid_during_simulation,
+    hmac_valid: result.hmac_valid,
+    hash_chain_valid: result.hash_chain_valid,
+    baseline_valid: null,
+    message: "Tampering simulation completed. Original reading restored."
+  });
+
+  toast(
+    result.hmac_valid
+      ? "Tampering was not detected."
+      : "Invalid HMAC detected!",
+    !result.hmac_valid
+  );
+
   await refreshAll();
 }
 
-// Secure meter-reading dropdown
-async function syncReadingMeterOptions() {
-  const select = $("readingMeter");
-  const current = select.value;
-  const target = selectedMeter();
 
-  select.innerHTML = metersCache.length
-    ? metersCache.map(m => `<option value="${escapeHtml(m.meter_id)}">${escapeHtml(m.meter_id)} · ${escapeHtml(m.label)}</option>`).join("")
-    : '<option value="">No meters registered</option>';
 
-  if (metersCache.some(m => m.meter_id === current)) {
-    select.value = current;
-  } else if (metersCache.some(m => m.meter_id === target)) {
-    select.value = target;
-  }
-
-  await loadReadingHistory();
-}
 
 // Readings history table
 async function loadReadingHistory() {
